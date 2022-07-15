@@ -1,0 +1,119 @@
+{% comment %} Merge add-on products to a primary product based on metafields - am
+The handles of the add-on products are stored in the metafields of the primary product {% endcomment %}
+
+
+{% comment %} Add in all the variants of the current product {% endcomment %}
+{% assign productVariants = product.variants %}
+
+{% comment %}	option names of the current product {% endcomment %}
+{% assign productOptionNames = product.options | json %}
+
+{% comment %} add all the handles of the add-on products that were stored in the current product's metafields {% endcomment %}
+
+{% assign productList = "" | split: "," %}
+
+{% if product.metafields.custom.first_addon %}
+  {% assign productAddon1 = product.metafields.custom.first_addon %}
+  {% assign handle = productAddon1 | split: ',' %}
+  {% assign productList =productList|concat:handle %}
+{% endif %}
+{% if product.metafields.custom.second_addon %}
+  {% assign productAddon2 = product.metafields.custom.second_addon %}
+  {% assign handle = productAddon2 | split: ',' %}
+  {% assign productList = productList|concat:handle %}
+{% endif %}
+
+{% for productListHandle in productList %}
+
+	{% comment %} each of the add-on products	{% endcomment %}
+	{% assign productListItem = all_products[productListHandle] %}
+
+	{% comment %} option names of the add-on product {% endcomment %}	
+	{% assign productListOption = productListItem.options | json %}
+
+	{% comment %} return/continue if the option names don't match	{% endcomment %}
+	{% unless productListOption == productOptionNames %}{% continue %}{% endunless %}
+
+	{% comment %} Update our primary product's variant list with the additional variants of add-on product {% endcomment %}
+	{% assign productVariants = productVariants | concat:productListItem.variants %}
+{% endfor %}
+
+{% comment %} new <select> for the expanded variant list {% endcomment %}
+<select name="id" id="ProductSelect" data-index="option">
+  {% for variant in productVariants %}
+    <option value="{{ variant.id }}" {%- if variant == current_variant %} selected="selected" {%- endif -%}>
+      {{ variant.title }} ({{ variant.id }})
+      {%- if variant.available == false %} - {{ 'products.product.sold_out' | t }}{% endif %}
+    </option>
+  {% endfor %}
+</select>
+
+{% comment %} add the pre-built JS for display of variant options {% endcomment %}
+{{ 'option_selection.js' | shopify_asset_url | script_tag }}
+
+<style>
+  .product-form__group-merged-2 {
+    display: flex;
+    flex-wrap: wrap;
+    margin-bottom: 15px;
+  }
+.product-form__group-merged-2 .selector-wrapper {
+  flex-grow: 0;
+  flex-basis: 100%;
+  margin-bottom: 10px;
+  padding: 0;
+}
+
+@media only screen and (min-width: 990px) {
+  .product-form__group-merged-2 .selector-wrapper
+  {
+    flex-basis: 50%;
+    padding: 0 5px;
+  }
+}
+
+.product-form__group-merged-2 select  {
+  display: block;
+  width: 100%;
+}
+</style>
+
+<script>
+	/* build a new product json output for the option selectors to use.
+		Since the product json can be used by other apps and scripts let's just recreate the whole thing from scratch, using out new variant list instead of the default ones.*/
+	var productJson = {
+		id: {{ product.id | json }},
+		title: {{ product.title | json }},
+		handle: {{ product.handle | json }},
+		description: {{ product.description | json }},
+		vendor: {{ product.vendor | json }},
+		type: {{ product.type | json }},
+		tags: {{ product.tags | json }},
+		price: {{ product.price | json }},
+		price_min: {{ product.price_min | json }},
+		price_max: {{ product.price_max | json }},
+		available: {{ product.available | json }},
+		price_varies: {{ product.price_varies | json }},
+		compare_at_price: {{ product.compare_at_price | json }},
+		compare_at_price_min: {{ product.compare_at_price_min | json }},
+		compare_at_price_max: {{ product.compare_at_price_max | json }},
+		compare_at_price_varies: {{ product.compare_at_price_varies | json }},
+		variants: {{ productVariants | json }}, /* this is our new master list - assuming it works! */ 
+		images: {{ product.images | json }},
+		featured_image: {{ product.featured_image | json }},
+		options: {{ product.options | json }},
+		url: {{ product.url | json }}
+	};
+
+	var selectCallback = function(variant, selector) {
+		console.log(variant, selector);
+		return;
+	};
+	/* fire the option selector scripts */
+    new Shopify.OptionSelectors('ProductSelect', {
+		product: productJson,
+		onVariantSelected: selectCallback,
+		enableHistoryState: true
+		});
+
+</script>
